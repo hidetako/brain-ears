@@ -24,13 +24,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # latest.yml まで揃っていれば公開済みとみなす (途中で失敗した Release は作り直す)
       - name: Check whether this version is already released
         id: check
         shell: bash
         run: |
           tag="v$(node -p "require('./package.json').version")"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+          assets="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2> /dev/null || true)"
+          if echo "$assets" | grep -qx 'latest.yml'; then
             echo "$tag は公開済みのためスキップします"
             echo "build=false" >> "$GITHUB_OUTPUT"
           else
@@ -46,19 +48,20 @@ jobs:
       - run: npm ci
         if: steps.check.outputs.build == 'true'
 
-      # Release の公開には既存のタグが必要なため、先にタグを作る
-      - name: Create tag
+      - name: Build installer
+        if: steps.check.outputs.build == 'true'
+        run: npm run dist
+
+      # インストーラー・差分情報・latest.yml (自動更新が読むファイル) をまとめて公開する
+      - name: Publish release
         if: steps.check.outputs.build == 'true'
         shell: bash
         run: |
           tag="${{ steps.check.outputs.tag }}"
-          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
-            echo "タグ $tag は作成済みです"
+          files=(dist/*.exe dist/*.exe.blockmap dist/latest.yml)
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$tag" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
           else
-            git tag "$tag"
-            git push origin "refs/tags/$tag"
+            gh release create "$tag" "${files[@]}" --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --title "$tag" --notes "Binaural Player $tag"
           fi
-
-      - name: Build and publish installer
-        if: steps.check.outputs.build == 'true'
-        run: npm run release

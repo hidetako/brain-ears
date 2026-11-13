@@ -13,8 +13,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node test/engine.test.js",
-    "dist": "electron-builder --win --publish never",
-    "release": "electron-builder --win --publish always"
+    "dist": "electron-builder --win --publish never"
   },
   "build": {
     "appId": "com.hidetako.binauralplayer",
@@ -45,8 +44,7 @@
       {
         "provider": "github",
         "owner": "hidetako",
-        "repo": "brain-ears",
-        "releaseType": "release"
+        "repo": "brain-ears"
       }
     ]
   },
