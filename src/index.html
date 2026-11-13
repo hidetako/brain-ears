@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+  <title>Binaural Player</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Binaural Player</h1>
+      <p class="note">ヘッドホン／イヤホンで使用してください</p>
+    </header>
+
+    <section class="ears" aria-label="現在の出力">
+      <div class="ear">
+        <span class="ear-label">左耳</span>
+        <span class="ear-freq" id="freqL">—</span>
+      </div>
+      <div class="beat">
+        <span class="ear-label">うなり</span>
+        <span class="ear-freq" id="beat">—</span>
+      </div>
+      <div class="ear">
+        <span class="ear-label">右耳</span>
+        <span class="ear-freq" id="freqR">—</span>
+      </div>
+    </section>
+
+    <button id="toggle" class="play" type="button">再生</button>
+
+    <section class="panel">
+      <h2>音量（左右別）</h2>
+      <div class="row">
+        <label for="volL">左</label>
+        <input type="range" id="volL" min="0" max="100" step="1">
+        <input type="number" id="volLNum" min="0" max="100" step="1">
+        <span class="unit">%</span>
+      </div>
+      <div class="row">
+        <label for="volR">右</label>
+        <input type="range" id="volR" min="0" max="100" step="1">
+        <input type="number" id="volRNum" min="0" max="100" step="1">
+        <span class="unit">%</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>周波数</h2>
+      <div class="row">
+        <label for="diff">左右差</label>
+        <input type="range" id="diff" min="0.5" max="20" step="0.1">
+        <input type="number" id="diffNum" min="0.5" max="20" step="0.1">
+        <span class="unit">Hz</span>
+      </div>
+      <div class="row">
+        <label for="base">基準音</label>
+        <input type="range" id="base" min="40" max="1000" step="1">
+        <input type="number" id="baseNum" min="40" max="1000" step="1">
+        <span class="unit">Hz</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>
+        <label class="check">
+          <input type="checkbox" id="swapEnabled">
+          左右を一定時間ごとに入れ替える
+        </label>
+      </h2>
+      <div class="row">
+        <label for="swapInterval">間隔</label>
+        <input type="range" id="swapInterval" min="0.1" max="5" step="0.1">
+        <input type="number" id="swapIntervalNum" min="0.1" max="5" step="0.1">
+        <span class="unit">秒</span>
+      </div>
+    </section>
+
+    <footer>
+      <span id="version"></span>
+      <span id="update"></span>
+    </footer>
+  </main>
+
+  <script src="engine.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+{
+  "name": "binaural-player",
+  "productName": "Binaural Player",
+  "version": "1.0.0",
+  "description": "左右別音量・周波数差・左右入れ替えを調整できるバイノーラルビート プレーヤー",
+  "main": "src/main.js",
+  "author": "hidetako",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hidetako/brain-ears.git"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/engine.test.js",
+    "dist": "electron-builder --win --publish never",
+    "release": "electron-builder --win --publish always"
+  },
+  "build": {
+    "appId": "com.hidetako.binauralplayer",
+    "productName": "Binaural Player",
+    "files": [
+      "src/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Binaural Player",
+      "artifactName": "Binaural-Player-Setup-${version}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "hidetako",
+        "repo": "brain-ears",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "^45.3.1",
+    "electron-builder": "^26.18.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  }
+}
