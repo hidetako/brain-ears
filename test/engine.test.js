@@ -117,6 +117,26 @@ const near = (actual, expected, tol, label) =>
   }
   assert.deepStrictEqual(seen, [200, 210, 200, 210], `入れ替え順: ${seen}`);
 
+  // 6b) チャンネルに固定: 音量が音と一緒に左右へ移る (比が 4 と 1/4 を交互に)
+  await page.check('input[name="volumeMode"][value="channel"]');
+  await page.fill('#swapIntervalNum', '1'); // 入れ替えの基準時刻を取り直す
+  await page.dispatchEvent('#swapIntervalNum', 'change');
+  const ratios = [];
+  for (let i = 0; i < 4; i++) {
+    await page.waitForTimeout(i === 0 ? 500 : 1000);
+    m = await measure(page);
+    // 200 Hz (左ch, 60%) が鳴っている耳のほうが常に大きい
+    const loudIsLeft = m.L.rms > m.R.rms;
+    near(loudIsLeft ? m.L.freq : m.R.freq, 200, 0.6, `大きい側は左ch の音 #${i}`);
+    near(Math.max(m.L.rms, m.R.rms) / Math.min(m.L.rms, m.R.rms), 4, 0.3, `チャンネル固定の音量比 #${i}`);
+    ratios.push(loudIsLeft ? 'L' : 'R');
+  }
+  assert.ok(
+    ratios.join('') === 'LRLR' || ratios.join('') === 'RLRL',
+    `チャンネル固定では大きい側が交互に入れ替わる: ${ratios}`
+  );
+  await page.check('input[name="volumeMode"][value="ear"]');
+
   // 7) 最短 0.1 秒間隔: 2 秒間に約 20 回入れ替わる
   await page.evaluate(() => {
     window.__swaps = 0;
@@ -142,6 +162,7 @@ const near = (actual, expected, tol, label) =>
   await page.reload();
   assert.strictEqual(await page.inputValue('#volLNum'), '60');
   assert.strictEqual(await page.inputValue('#swapIntervalNum'), '0.1');
+  assert.ok(await page.isChecked('input[name="volumeMode"][value="ear"]'));
 
   assert.deepStrictEqual(errors, [], `ページエラー: ${errors}`);
   await browser.close();

@@ -63,6 +63,28 @@
   bind('base', 0);
   bind('swapInterval', 1);
 
+  // 音量の効かせ方 (耳に固定 / チャンネルに固定)
+  const modeRadios = document.querySelectorAll('input[name="volumeMode"]');
+  const HINTS = {
+    ear: '左右を入れ替えても、左耳・右耳それぞれの音量は変わりません。',
+    channel: '音量は音源（左ch・右ch）に付き、左右を入れ替えると音量も一緒に入れ替わります。',
+  };
+  const renderMode = () => {
+    for (const r of modeRadios) r.checked = r.value === engine.params.volumeMode;
+    $('volumeHint').textContent = HINTS[engine.params.volumeMode];
+    const ch = engine.params.volumeMode === 'channel';
+    document.querySelector('label[for="volL"]').textContent = ch ? '左ch' : '左耳';
+    document.querySelector('label[for="volR"]').textContent = ch ? '右ch' : '右耳';
+  };
+  for (const r of modeRadios) {
+    r.addEventListener('change', () => {
+      engine.setParams({ volumeMode: r.value });
+      save();
+      renderMode();
+    });
+  }
+  renderMode();
+
   const swapBox = $('swapEnabled');
   const swapPanel = swapBox.closest('.panel');
   const renderSwap = () => {

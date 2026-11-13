@@ -32,6 +32,17 @@
 
     <section class="panel">
       <h2>音量（左右別）</h2>
+      <div class="modes" role="radiogroup" aria-label="音量の効かせ方">
+        <label class="check">
+          <input type="radio" name="volumeMode" value="ear">
+          耳に固定
+        </label>
+        <label class="check">
+          <input type="radio" name="volumeMode" value="channel">
+          チャンネルに固定
+        </label>
+      </div>
+      <p class="hint" id="volumeHint"></p>
       <div class="row">
         <label for="volL">左</label>
         <input type="range" id="volL" min="0" max="100" step="1">

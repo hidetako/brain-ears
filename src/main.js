@@ -13,9 +13,9 @@ function sendStatus(text) {
 function createWindow() {
   win = new BrowserWindow({
     width: 500,
-    height: 640,
+    height: 720,
     minWidth: 420,
-    minHeight: 600,
+    minHeight: 680,
     backgroundColor: '#14171c',
     autoHideMenuBar: true,
     webPreferences: {

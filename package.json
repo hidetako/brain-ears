@@ -1,7 +1,7 @@
 {
   "name": "binaural-player",
   "productName": "Binaural Player",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "左右別音量・周波数差・左右入れ替えを調整できるバイノーラルビート プレーヤー",
   "main": "src/main.js",
   "author": "hidetako",

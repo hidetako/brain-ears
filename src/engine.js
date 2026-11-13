@@ -3,13 +3,16 @@
 /**
  * バイノーラルビート音声エンジン (Web Audio API)
  *
- *   oscA (基準周波数)        ─┬─ gAL ─┐
- *                            └─ gAR ─┼─┐
- *   oscB (基準 + 周波数差)   ─┬─ gBL ─┘ │      volL ─┐
- *                            └─ gBR ───┘      volR ─┴─ merger ─ master ─ 出力
+ *   oscA (左ch: 基準周波数)      ─ srcA ─┬─ gAL ─┐
+ *                                       └─ gAR ─┼─┐
+ *   oscB (右ch: 基準 + 周波数差) ─ srcB ─┬─ gBL ─┘ │    earL ─┐
+ *                                       └─ gBR ───┘    earR ─┴─ merger ─ master ─ 出力
  *
- * 通常時は A→左耳 / B→右耳。入れ替え時は A→右耳 / B→左耳。
- * 音量 (volL / volR) は「耳」に固定で、入れ替わるのは音(周波数)だけ。
+ * 通常時は 左ch→左耳 / 右ch→右耳。入れ替え時は 左ch→右耳 / 右ch→左耳。
+ *
+ * 音量の効かせ方は 2 通り (volumeMode):
+ *   'ear'     … 耳に固定。earL / earR に音量をかける。入れ替えても各耳の音量は変わらない。
+ *   'channel' … チャンネルに固定。srcA / srcB に音量をかける。入れ替えると音量も音と一緒に移る。
  */
 (function (root) {
   const LIMITS = {
@@ -52,6 +55,7 @@
         diff: 10,
         volL: 50,
         volR: 50,
+        volumeMode: 'ear',
         swapEnabled: false,
         swapInterval: 1,
       };
@@ -63,6 +67,9 @@
       if (patch.diff !== undefined) p.diff = clamp(patch.diff, LIMITS.diff);
       if (patch.volL !== undefined) p.volL = clamp(patch.volL, LIMITS.volume);
       if (patch.volR !== undefined) p.volR = clamp(patch.volR, LIMITS.volume);
+      if (patch.volumeMode !== undefined) {
+        p.volumeMode = patch.volumeMode === 'channel' ? 'channel' : 'ear';
+      }
       if (patch.swapInterval !== undefined) {
         p.swapInterval = clamp(patch.swapInterval, LIMITS.swap);
       }
@@ -73,12 +80,24 @@
       const n = this.nodes;
       n.oscA.frequency.setTargetAtTime(p.base, t, PARAM_FADE);
       n.oscB.frequency.setTargetAtTime(p.base + p.diff, t, PARAM_FADE);
-      n.volL.gain.setTargetAtTime(volumeToGain(p.volL), t, PARAM_FADE);
-      n.volR.gain.setTargetAtTime(volumeToGain(p.volR), t, PARAM_FADE);
+      const v = this._volumeGains();
+      n.srcA.gain.setTargetAtTime(v.srcA, t, PARAM_FADE);
+      n.srcB.gain.setTargetAtTime(v.srcB, t, PARAM_FADE);
+      n.earL.gain.setTargetAtTime(v.earL, t, PARAM_FADE);
+      n.earR.gain.setTargetAtTime(v.earR, t, PARAM_FADE);
 
       if (patch.swapEnabled !== undefined || patch.swapInterval !== undefined) {
         this._rescheduleSwaps();
       }
+    }
+
+    // 音量モードに応じて、音量をかける場所 (チャンネル側 / 耳側) を決める
+    _volumeGains() {
+      const l = volumeToGain(this.params.volL);
+      const r = volumeToGain(this.params.volR);
+      return this.params.volumeMode === 'channel'
+        ? { srcA: l, srcB: r, earL: 1, earR: 1 }
+        : { srcA: 1, srcB: 1, earL: l, earR: r };
     }
 
     async start() {
@@ -104,20 +123,27 @@
       const gAR = mk(0);
       const gBL = mk(0);
       const gBR = mk(1);
-      const volL = mk(volumeToGain(p.volL));
-      const volR = mk(volumeToGain(p.volR));
+      const v = this._volumeGains();
+      const srcA = mk(v.srcA);
+      const srcB = mk(v.srcB);
+      const earL = mk(v.earL);
+      const earR = mk(v.earR);
       const master = mk(0);
       const merger = ctx.createChannelMerger(2);
 
-      oscA.connect(gAL).connect(volL);
-      oscA.connect(gAR).connect(volR);
-      oscB.connect(gBL).connect(volL);
-      oscB.connect(gBR).connect(volR);
-      volL.connect(merger, 0, 0);
-      volR.connect(merger, 0, 1);
+      oscA.connect(srcA);
+      oscB.connect(srcB);
+      srcA.connect(gAL).connect(earL);
+      srcA.connect(gAR).connect(earR);
+      srcB.connect(gBL).connect(earL);
+      srcB.connect(gBR).connect(earR);
+      earL.connect(merger, 0, 0);
+      earR.connect(merger, 0, 1);
       merger.connect(master).connect(ctx.destination);
 
-      this.nodes = { oscA, oscB, gAL, gAR, gBL, gBR, volL, volR, master, merger };
+      this.nodes = {
+        oscA, oscB, srcA, srcB, gAL, gAR, gBL, gBR, earL, earR, master, merger,
+      };
       this.swapped = false;
 
       await ctx.resume();
