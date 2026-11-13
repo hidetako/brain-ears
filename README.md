@@ -31,20 +31,25 @@
 
 ## 新しい版の出し方
 
-`package.json` の `version` を上げてコミットし、同じ番号のタグを push します。
+`package.json` の `version` を上げて main に push するだけです。
 
 ```bash
-npm version patch
+npm version patch --no-git-tag-version
 ```
 
 ```bash
-git push origin main --follow-tags
+git commit -am "Release 1.0.1"
 ```
 
-タグ(`v1.0.1` など)の push をきっかけに GitHub Actions が Windows 上でインストーラーをビルドし、
-Release として公開します。既存ユーザーは次回起動時に自動で更新されます。
+```bash
+git push origin main
+```
 
-自動更新は公開リポジトリの Release を前提にしています。
+main への push をきっかけに GitHub Actions が動き、その version の Release がまだ無ければ
+Windows 上でインストーラーをビルドして Release(タグ `v1.0.1` など)として公開します。
+既存ユーザーは次回起動時に自動で更新されます。version を変えていない push では何も公開されません。
+
+自動更新は公開(Public)リポジトリの Release を前提にしています。Private のままでは更新を取得できません。
 
 ## 開発
 
