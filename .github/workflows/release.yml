@@ -46,6 +46,19 @@ jobs:
       - run: npm ci
         if: steps.check.outputs.build == 'true'
 
+      # Release の公開には既存のタグが必要なため、先にタグを作る
+      - name: Create tag
+        if: steps.check.outputs.build == 'true'
+        shell: bash
+        run: |
+          tag="${{ steps.check.outputs.tag }}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+            echo "タグ $tag は作成済みです"
+          else
+            git tag "$tag"
+            git push origin "refs/tags/$tag"
+          fi
+
       - name: Build and publish installer
         if: steps.check.outputs.build == 'true'
         run: npm run release
