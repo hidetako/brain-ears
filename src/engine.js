@@ -3,16 +3,20 @@
 /**
  * バイノーラルビート音声エンジン (Web Audio API)
  *
- *   oscA (左ch: 基準周波数)      ─ srcA ─┬─ gAL ─┐
- *                                       └─ gAR ─┼─┐
- *   oscB (右ch: 基準 + 周波数差) ─ srcB ─┬─ gBL ─┘ │    earL ─┐
- *                                       └─ gBR ───┘    earR ─┴─ merger ─ master ─ 出力
+ * 耳ごとに発振器を 1 つ持ち、左右の入れ替えは「音の混ぜ替え」ではなく
+ * 「各耳の発振器の周波数を滑らかに移す」ことで行う。波形がつながったまま
+ * 周波数だけが変わるので、入れ替えの瞬間に振幅の落ち込み (ノイズ) が出ない。
  *
- * 通常時は 左ch→左耳 / 右ch→右耳。入れ替え時は 左ch→右耳 / 右ch→左耳。
+ * 各耳には 0〜1 の係数 s がある (0 = 左ch の音, 1 = 右ch の音)。
+ *   通常時:   左耳 s=0 / 右耳 s=1      入れ替え時: 左耳 s=1 / 右耳 s=0
  *
- * 音量の効かせ方は 2 通り (volumeMode):
- *   'ear'     … 耳に固定。earL / earR に音量をかける。入れ替えても各耳の音量は変わらない。
- *   'channel' … チャンネルに固定。srcA / srcB に音量をかける。入れ替えると音量も音と一緒に移る。
+ *   周波数 = 基準音 + 周波数差 × s
+ *   音量   = (1 - s) × volA + s × volB
+ *
+ * 音量の効かせ方 (volumeMode):
+ *   'ear'     … 耳に固定。volA = volB = その耳の音量。入れ替えても音量は変わらない。
+ *   'channel' … チャンネルに固定。volA = 左ch の音量, volB = 右ch の音量。
+ *               入れ替えると音量も音と一緒に滑らかに移る。
  */
 (function (root) {
   const LIMITS = {
@@ -22,12 +26,23 @@
     volume: { min: 0, max: 100 },
   };
 
-  const SWAP_FADE = 0.008; // 入れ替え時のクロスフェード秒数 (クリックノイズ防止)
+  const SWAP_GLIDE_MAX = 0.03; // 入れ替えにかける最大秒数
+  const SWAP_GLIDE_RATIO = 0.3; // 入れ替え間隔に対する上限の割合
   const PARAM_FADE = 0.03; // 音量・周波数変更のなめらかさ
   const START_FADE = 0.05;
   const LOOKAHEAD = 0.2; // 何秒先まで入れ替えを予約するか
   const TICK_MS = 25;
   const HEADROOM = 0.5; // 最大音量時の出力ゲイン
+
+  // 0→1 / 1→0 を角のない S 字 (レイズドコサイン) でつなぐ曲線
+  const CURVE_POINTS = 64;
+  const CURVE_UP = new Float32Array(CURVE_POINTS);
+  const CURVE_DOWN = new Float32Array(CURVE_POINTS);
+  for (let i = 0; i < CURVE_POINTS; i++) {
+    const v = (1 - Math.cos((Math.PI * i) / (CURVE_POINTS - 1))) / 2;
+    CURVE_UP[i] = v;
+    CURVE_DOWN[i] = 1 - v;
+  }
 
   function clamp(value, { min, max }) {
     const n = Number(value);
@@ -77,27 +92,31 @@
 
       if (!this.playing) return;
       const t = this.ctx.currentTime;
-      const n = this.nodes;
-      n.oscA.frequency.setTargetAtTime(p.base, t, PARAM_FADE);
-      n.oscB.frequency.setTargetAtTime(p.base + p.diff, t, PARAM_FADE);
+      const { L, R } = this.nodes;
       const v = this._volumeGains();
-      n.srcA.gain.setTargetAtTime(v.srcA, t, PARAM_FADE);
-      n.srcB.gain.setTargetAtTime(v.srcB, t, PARAM_FADE);
-      n.earL.gain.setTargetAtTime(v.earL, t, PARAM_FADE);
-      n.earR.gain.setTargetAtTime(v.earR, t, PARAM_FADE);
+      for (const [ear, vol] of [[L, v.L], [R, v.R]]) {
+        ear.osc.frequency.setTargetAtTime(p.base, t, PARAM_FADE);
+        ear.diff.gain.setTargetAtTime(p.diff, t, PARAM_FADE);
+        ear.volA.gain.setTargetAtTime(vol.a, t, PARAM_FADE);
+        ear.volB.gain.setTargetAtTime(vol.b, t, PARAM_FADE);
+      }
 
       if (patch.swapEnabled !== undefined || patch.swapInterval !== undefined) {
         this._rescheduleSwaps();
       }
     }
 
-    // 音量モードに応じて、音量をかける場所 (チャンネル側 / 耳側) を決める
+    // 各耳の「左ch の音を鳴らすときの音量 a」「右ch の音を鳴らすときの音量 b」
     _volumeGains() {
       const l = volumeToGain(this.params.volL);
       const r = volumeToGain(this.params.volR);
       return this.params.volumeMode === 'channel'
-        ? { srcA: l, srcB: r, earL: 1, earR: 1 }
-        : { srcA: 1, srcB: 1, earL: l, earR: r };
+        ? { L: { a: l, b: r }, R: { a: l, b: r } }
+        : { L: { a: l, b: l }, R: { a: r, b: r } };
+    }
+
+    _glide() {
+      return Math.min(SWAP_GLIDE_MAX, this.params.swapInterval * SWAP_GLIDE_RATIO);
     }
 
     async start() {
@@ -107,49 +126,56 @@
       const ctx = this.ctx;
       const p = this.params;
 
-      const oscA = ctx.createOscillator();
-      const oscB = ctx.createOscillator();
-      oscA.type = 'sine';
-      oscB.type = 'sine';
-      oscA.frequency.value = p.base;
-      oscB.frequency.value = p.base + p.diff;
-
       const mk = (value) => {
         const g = ctx.createGain();
         g.gain.value = value;
         return g;
       };
-      const gAL = mk(1);
-      const gAR = mk(0);
-      const gBL = mk(0);
-      const gBR = mk(1);
-      const v = this._volumeGains();
-      const srcA = mk(v.srcA);
-      const srcB = mk(v.srcB);
-      const earL = mk(v.earL);
-      const earR = mk(v.earR);
-      const master = mk(0);
-      const merger = ctx.createChannelMerger(2);
 
-      oscA.connect(srcA);
-      oscB.connect(srcB);
-      srcA.connect(gAL).connect(earL);
-      srcA.connect(gAR).connect(earR);
-      srcB.connect(gBL).connect(earL);
-      srcB.connect(gBR).connect(earR);
-      earL.connect(merger, 0, 0);
-      earR.connect(merger, 0, 1);
+      const one = ctx.createConstantSource(); // 係数 s の元になる定数 1
+      one.offset.value = 1;
+      const merger = ctx.createChannelMerger(2);
+      const master = mk(0);
+      const vols = this._volumeGains();
+
+      const makeEar = (initialS, vol, channel) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = p.base;
+
+        const s = mk(initialS); // この gain を自動化して入れ替える
+        one.connect(s);
+
+        // 周波数 = 基準音 + 周波数差 × s
+        const diff = mk(p.diff);
+        s.connect(diff).connect(osc.frequency);
+
+        // 音量 = (1 - s) × volA + s × volB
+        const mixA = mk(1);
+        const mixB = mk(0);
+        const negate = mk(-1);
+        s.connect(negate).connect(mixA.gain);
+        s.connect(mixB.gain);
+        const volA = mk(vol.a);
+        const volB = mk(vol.b);
+        osc.connect(mixA).connect(volA).connect(merger, 0, channel);
+        osc.connect(mixB).connect(volB).connect(merger, 0, channel);
+
+        return { osc, s, diff, volA, volB };
+      };
+
+      const L = makeEar(0, vols.L, 0);
+      const R = makeEar(1, vols.R, 1);
       merger.connect(master).connect(ctx.destination);
 
-      this.nodes = {
-        oscA, oscB, srcA, srcB, gAL, gAR, gBL, gBR, earL, earR, master, merger,
-      };
+      this.nodes = { L, R, one, master, merger };
       this.swapped = false;
 
       await ctx.resume();
       const t = ctx.currentTime;
-      oscA.start(t);
-      oscB.start(t);
+      one.start(t);
+      L.osc.start(t);
+      R.osc.start(t);
       master.gain.setValueAtTime(0, t);
       master.gain.linearRampToValueAtTime(1, t + START_FADE);
 
@@ -164,13 +190,12 @@
       clearInterval(this.timer);
       this.timer = null;
       const ctx = this.ctx;
-      const { master, oscA, oscB } = this.nodes;
+      const { master, one, L, R } = this.nodes;
       const t = ctx.currentTime;
       master.gain.cancelScheduledValues(t);
       master.gain.setValueAtTime(master.gain.value, t);
       master.gain.linearRampToValueAtTime(0, t + START_FADE);
-      oscA.stop(t + START_FADE + 0.01);
-      oscB.stop(t + START_FADE + 0.01);
+      for (const node of [one, L.osc, R.osc]) node.stop(t + START_FADE + 0.01);
       this.nodes = null;
       this.ctx = null;
       this.swapped = false;
@@ -181,18 +206,22 @@
     // 予約済みの入れ替えを取り消し、現在の設定で予約し直す
     _rescheduleSwaps() {
       const t = this.ctx.currentTime;
-      const { gAL, gAR, gBL, gBR } = this.nodes;
-      for (const g of [gAL, gAR, gBL, gBR]) g.gain.cancelScheduledValues(t);
+      if (!this.params.swapEnabled) this._setSwapped(false); // 切ったら通常の左右へ戻す
 
-      if (this.params.swapEnabled) {
-        this._applyRouting(this.swapped, t);
-        this.nextSwapTime = t + this.params.swapInterval;
-      } else {
-        // 入れ替えを切ったら通常の左右へ戻す
-        this._applyRouting(false, t);
-        this._setSwapped(false);
-        this.nextSwapTime = Infinity;
+      // 途中の値を保ったまま、あるべき状態へ滑らかに寄せる
+      const { L, R } = this.nodes;
+      const targetL = this.swapped ? 1 : 0;
+      for (const [ear, target] of [[L, targetL], [R, 1 - targetL]]) {
+        const param = ear.s.gain;
+        if (param.cancelAndHoldAtTime) param.cancelAndHoldAtTime(t);
+        else param.cancelScheduledValues(t);
+        param.linearRampToValueAtTime(target, t + SWAP_GLIDE_MAX);
       }
+
+      // 次の入れ替えは上の寄せが終わってから
+      this.nextSwapTime = this.params.swapEnabled
+        ? t + Math.max(this.params.swapInterval, SWAP_GLIDE_MAX + 0.01)
+        : Infinity;
     }
 
     _tick() {
@@ -200,26 +229,17 @@
       const horizon = this.ctx.currentTime + LOOKAHEAD;
       while (this.nextSwapTime < horizon) {
         const next = !this.swapped;
-        this._applyRouting(next, this.nextSwapTime);
+        this._scheduleSwap(next, this.nextSwapTime);
         this._setSwapped(next, this.nextSwapTime);
         this.nextSwapTime += this.params.swapInterval;
       }
     }
 
-    _applyRouting(swapped, time) {
-      const { gAL, gAR, gBL, gBR } = this.nodes;
-      const direct = swapped ? 0 : 1;
-      const cross = swapped ? 1 : 0;
-      const end = time + SWAP_FADE;
-      for (const [g, target] of [
-        [gAL, direct],
-        [gBR, direct],
-        [gAR, cross],
-        [gBL, cross],
-      ]) {
-        g.gain.setValueAtTime(1 - target, time);
-        g.gain.linearRampToValueAtTime(target, end);
-      }
+    _scheduleSwap(swapped, time) {
+      const { L, R } = this.nodes;
+      const glide = this._glide();
+      L.s.gain.setValueCurveAtTime(swapped ? CURVE_UP : CURVE_DOWN, time, glide);
+      R.s.gain.setValueCurveAtTime(swapped ? CURVE_DOWN : CURVE_UP, time, glide);
     }
 
     _setSwapped(swapped, time) {
