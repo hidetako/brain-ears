@@ -80,6 +80,7 @@
         diff: 10,
         volL: 50,
         volR: 50,
+        volBoth: 100, // 左右共通の音量 (左右の比は保ったまま全体を上げ下げする)
         volumeMode: 'ear',
         swapEnabled: false,
         swapInterval: 1,
@@ -96,6 +97,7 @@
       if (patch.diff !== undefined) p.diff = clamp(patch.diff, LIMITS.diff);
       if (patch.volL !== undefined) p.volL = clamp(patch.volL, LIMITS.volume);
       if (patch.volR !== undefined) p.volR = clamp(patch.volR, LIMITS.volume);
+      if (patch.volBoth !== undefined) p.volBoth = clamp(patch.volBoth, LIMITS.volume);
       if (patch.volumeMode !== undefined) {
         p.volumeMode = patch.volumeMode === 'channel' ? 'channel' : 'ear';
       }
@@ -186,10 +188,12 @@
     _volumeGains() {
       const headroom = HEADROOM[this.params.source];
       // 0-100% を聴感に近いカーブでゲインへ変換
-      const gain = (percent) => {
+      const curve = (percent) => {
         const v = clamp(percent, LIMITS.volume) / 100;
-        return v * v * headroom;
+        return v * v;
       };
+      const both = curve(this.params.volBoth);
+      const gain = (percent) => curve(percent) * both * headroom;
       const l = gain(this.params.volL);
       const r = gain(this.params.volR);
       return this.params.volumeMode === 'channel'

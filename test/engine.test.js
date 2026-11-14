@@ -91,6 +91,18 @@ const near = (actual, expected, tol, label) =>
   m = await measure(page);
   near(m.L.rms / m.R.rms, 4, 0.2, '左右の音量比');
 
+  // 4b) 「両方」を 50% にすると、左右の比 (4:1) を保ったまま両方とも 1/4 になる
+  const before = m;
+  await page.fill('#volBothNum', '50');
+  await page.dispatchEvent('#volBothNum', 'change');
+  await page.waitForTimeout(600);
+  m = await measure(page);
+  near(m.L.rms / before.L.rms, 0.25, 0.02, '両方 50% での左の音量');
+  near(m.R.rms / before.R.rms, 0.25, 0.02, '両方 50% での右の音量');
+  near(m.L.rms / m.R.rms, 4, 0.2, '両方を動かしても左右の比は同じ');
+  await page.fill('#volBothNum', '100');
+  await page.dispatchEvent('#volBothNum', 'change');
+
   // 5) 右を 0% にすると右は無音
   await page.fill('#volRNum', '0');
   await page.dispatchEvent('#volRNum', 'change');

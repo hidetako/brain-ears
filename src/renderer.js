@@ -77,6 +77,7 @@
 
   bind('volL', 0);
   bind('volR', 0);
+  bind('volBoth', 0);
   bind('diff', 1);
   bind('base', 0);
   bind('swapInterval', 1);
