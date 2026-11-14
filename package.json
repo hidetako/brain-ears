@@ -1,7 +1,7 @@
 {
   "name": "binaural-player",
   "productName": "Binaural Player",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "左右別音量・周波数差・左右入れ替えを調整できるバイノーラルビート プレーヤー",
   "main": "src/main.js",
   "author": "hidetako",
@@ -12,8 +12,9 @@
   },
   "scripts": {
     "start": "electron .",
-    "test": "node test/engine.test.js",
-    "dist": "electron-builder --win --publish never"
+    "test": "node test/engine.test.js && node test/files.test.js",
+    "dist": "electron-builder --win --publish never",
+    "test:app": "node test/app.test.js"
   },
   "build": {
     "appId": "com.hidetako.binauralplayer",

@@ -149,42 +149,34 @@ const near = (actual, expected, tol, label) =>
   const swaps = await page.evaluate(() => window.__swaps);
   assert.ok(swaps >= 18 && swaps <= 22, `0.1 秒間隔の入れ替え回数: ${swaps}`);
 
-  // 7b) 入れ替えノイズが無いこと: 耳に固定・0.1 秒間隔で 2 秒録音し、
-  //     各耳の波形の山の高さ (振幅) が入れ替えの瞬間も一定であることを確認する
-  const env = await page.evaluate(async () => {
-    const { ctx, nodes } = window.engine;
-    const sp = ctx.createScriptProcessor(4096, 2, 1);
-    const rec = [[], []];
-    sp.onaudioprocess = (e) => {
-      for (let ch = 0; ch < 2; ch++) rec[ch].push(...e.inputBuffer.getChannelData(ch));
-    };
-    nodes.merger.connect(sp);
-    sp.connect(ctx.destination);
-    await new Promise((r) => setTimeout(r, 2200));
-    nodes.merger.disconnect(sp);
-    sp.disconnect();
-    return rec.map((x) => {
-      let min = Infinity;
-      let max = 0;
-      for (let i = 4097; i < x.length - 1; i++) {
-        // 録音ブロックの継ぎ目は取りこぼしで波形が飛ぶことがあるため測定から外す
-        const pos = i % 4096;
-        if (pos < 2 || pos > 4093) continue;
-        const a = Math.abs(x[i]);
-        if (a > Math.abs(x[i - 1]) && a >= Math.abs(x[i + 1])) {
-          min = Math.min(min, a);
-          max = Math.max(max, a);
+  // 7b) 入れ替えノイズが無いこと: 耳に固定・0.1 秒間隔で、各耳の波形の山の高さ (振幅) が
+  //     入れ替えの瞬間も一定であることを確認する (約 0.68 秒 × 3 回 = 入れ替え約 20 回分)
+  await measure(page); // 測定用の分岐を用意
+  for (let round = 0; round < 3; round++) {
+    await page.waitForTimeout(750);
+    const env = await page.evaluate(() =>
+      [window.__tap.L, window.__tap.R].map((analyser) => {
+        const x = new Float32Array(analyser.fftSize);
+        analyser.getFloatTimeDomainData(x);
+        let min = Infinity;
+        let max = 0;
+        for (let i = 1; i < x.length - 1; i++) {
+          const a = Math.abs(x[i]);
+          if (a > Math.abs(x[i - 1]) && a >= Math.abs(x[i + 1])) {
+            min = Math.min(min, a);
+            max = Math.max(max, a);
+          }
         }
-      }
-      return { min, max, samples: x.length };
-    });
-  });
-  for (const [i, name] of ['左耳', '右耳'].entries()) {
-    assert.ok(env[i].samples > 48000, `${name}の録音が短い: ${env[i].samples}`);
-    assert.ok(
-      env[i].min / env[i].max > 0.98,
-      `${name}の振幅が入れ替え時に揺れている (最小/最大 = ${(env[i].min / env[i].max).toFixed(3)})`
+        return { min, max };
+      })
     );
+    for (const [i, name] of ['左耳', '右耳'].entries()) {
+      assert.ok(env[i].max > 0.01, `${name}が鳴っていない`);
+      assert.ok(
+        env[i].min / env[i].max > 0.98,
+        `${name}の振幅が入れ替え時に揺れている (最小/最大 = ${(env[i].min / env[i].max).toFixed(3)})`
+      );
+    }
   }
 
   // 8) 入れ替えを切ると通常の左右に戻る
@@ -196,7 +188,7 @@ const near = (actual, expected, tol, label) =>
 
   // 9) 停止、設定は再読み込み後も保持
   await page.click('#toggle');
-  assert.strictEqual(await page.textContent('#toggle'), '再生');
+  await page.waitForFunction(() => document.getElementById('toggle').textContent === '再生');
   await page.reload();
   assert.strictEqual(await page.inputValue('#volLNum'), '60');
   assert.strictEqual(await page.inputValue('#swapIntervalNum'), '0.1');

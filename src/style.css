@@ -13,7 +13,7 @@
 
 html, body {
   margin: 0;
-  height: 100%;
+  min-height: 100%;
   background: var(--bg);
   color: var(--text);
   font-family: "Yu Gothic UI", "Meiryo UI", "Segoe UI", sans-serif;
@@ -51,7 +51,16 @@ h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .02em; }
 }
 .beat { border-color: var(--accent); }
 .ear-label { color: var(--muted); font-size: 12px; }
-.ear-freq { font-size: 18px; font-variant-numeric: tabular-nums; }
+.ear-freq {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  padding: 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ear, .beat { min-width: 0; }
+.ears.files .ear-freq { font-size: 13px; line-height: 22px; }
 
 .play {
   appearance: none;
@@ -108,6 +117,35 @@ input[type="number"] {
 .hint { margin: -4px 0 0; color: var(--muted); font-size: 12px; }
 .panel.disabled .row { opacity: .45; }
 
+#filePanel { display: flex; flex-direction: column; gap: 8px; }
+#filePanel[hidden] { display: none; }
+.file-row { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.file-label { width: 44px; flex: none; }
+.file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-name.empty { color: var(--muted); }
+.file-row .hint { flex: 1; margin: 0; }
+.small {
+  appearance: none;
+  flex: none;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.small:hover { border-color: var(--accent); }
+.small:disabled { opacity: .45; cursor: default; border-color: var(--line); }
+.small:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+
 footer {
   display: flex;
   justify-content: space-between;
@@ -115,3 +153,5 @@ footer {
   font-size: 12px;
   min-height: 16px;
 }
+
+[hidden] { display: none !important; }

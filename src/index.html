@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; media-src 'self' blob:">
   <title>Binaural Player</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -19,7 +19,7 @@
         <span class="ear-freq" id="freqL">—</span>
       </div>
       <div class="beat">
-        <span class="ear-label">うなり</span>
+        <span class="ear-label" id="beatLabel">うなり</span>
         <span class="ear-freq" id="beat">—</span>
       </div>
       <div class="ear">
@@ -29,6 +29,40 @@
     </section>
 
     <button id="toggle" class="play" type="button">再生</button>
+
+    <section class="panel">
+      <h2>音源</h2>
+      <div class="modes" role="radiogroup" aria-label="音源">
+        <label class="check">
+          <input type="radio" name="source" value="tone">
+          純音（うなり）
+        </label>
+        <label class="check">
+          <input type="radio" name="source" value="file">
+          音声ファイル
+        </label>
+      </div>
+      <div id="filePanel" hidden>
+        <div class="file-row">
+          <span class="file-label">左ch</span>
+          <span class="file-name" id="fileNameL"></span>
+          <button type="button" class="small" id="filePickL">選択</button>
+          <button type="button" class="small" id="fileClearL">解除</button>
+          <input type="file" id="fileInputL" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.opus,.flac,.webm" hidden>
+        </div>
+        <div class="file-row">
+          <span class="file-label">右ch</span>
+          <span class="file-name" id="fileNameR"></span>
+          <button type="button" class="small" id="filePickR">選択</button>
+          <button type="button" class="small" id="fileClearR">解除</button>
+          <input type="file" id="fileInputR" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.opus,.flac,.webm" hidden>
+        </div>
+        <div class="file-row">
+          <span class="hint" id="fileHint"></span>
+          <button type="button" class="small" id="rewind">先頭に戻す</button>
+        </div>
+      </div>
+    </section>
 
     <section class="panel">
       <h2>音量（左右別）</h2>
@@ -57,7 +91,7 @@
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="freqPanel">
       <h2>周波数</h2>
       <div class="row">
         <label for="diff">左右差</label>

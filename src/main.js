@@ -1,21 +1,52 @@
 'use strict';
 
 const path = require('node:path');
-const { app, BrowserWindow, Menu, dialog, ipcMain } = require('electron');
+const fs = require('node:fs/promises');
+const { app, BrowserWindow, Menu, dialog, ipcMain, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 
 let win = null;
+
+// 読み込みを許可する音声ファイルの拡張子と種類
+const AUDIO_TYPES = {
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.ogg': 'audio/ogg',
+  '.opus': 'audio/ogg',
+  '.flac': 'audio/flac',
+  '.webm': 'audio/webm',
+};
+const MAX_AUDIO_BYTES = 1024 * 1024 * 1024;
+
+// 前回登録された音声ファイルを読み直す。読めなければ null
+async function readAudioFile(filePath) {
+  if (typeof filePath !== 'string' || !path.isAbsolute(filePath)) return null;
+  const type = AUDIO_TYPES[path.extname(filePath).toLowerCase()];
+  if (!type) return null;
+  try {
+    const stat = await fs.stat(filePath);
+    if (!stat.isFile() || stat.size > MAX_AUDIO_BYTES) return null;
+    const bytes = await fs.readFile(filePath);
+    return { name: path.basename(filePath), type, bytes };
+  } catch (_) {
+    return null;
+  }
+}
 
 function sendStatus(text) {
   if (win && !win.isDestroyed()) win.webContents.send('update:status', text);
 }
 
 function createWindow() {
+  // 画面が低い PC でもはみ出さない高さにする (中身は縦スクロールできる)
+  const { height: workHeight } = screen.getPrimaryDisplay().workAreaSize;
   win = new BrowserWindow({
     width: 500,
-    height: 720,
+    height: Math.min(800, workHeight),
     minWidth: 420,
-    minHeight: 680,
+    minHeight: 480,
     backgroundColor: '#14171c',
     autoHideMenuBar: true,
     webPreferences: {
@@ -78,6 +109,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   ipcMain.handle('app:version', () => app.getVersion());
+  ipcMain.handle('audio:read', (_event, filePath) => readAudioFile(filePath));
 
   app.whenReady().then(() => {
     createWindow();
