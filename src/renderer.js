@@ -54,9 +54,17 @@
   function bind(key, digits) {
     const range = $(key);
     const num = $(`${key}Num`);
+    // よく使う値へ一度に移るボタン (ある項目だけ)
+    const presets = document.querySelectorAll(`.presets[data-key="${key}"] button`);
+    const showPresets = () => {
+      for (const b of presets) {
+        b.classList.toggle('active', Number(b.dataset.value) === engine.params[key]);
+      }
+    };
     const show = () => {
       range.value = engine.params[key];
       num.value = fmt(engine.params[key], digits);
+      showPresets();
     };
     const apply = (raw) => {
       engine.setParams({ [key]: raw });
@@ -66,7 +74,14 @@
     range.addEventListener('input', () => {
       apply(range.value);
       num.value = fmt(engine.params[key], digits);
+      showPresets();
     });
+    for (const b of presets) {
+      b.addEventListener('click', () => {
+        apply(b.dataset.value);
+        show();
+      });
+    }
     // 入力途中は書き換えず、確定時に範囲内へ丸める
     num.addEventListener('change', () => {
       apply(num.value);

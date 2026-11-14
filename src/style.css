@@ -117,6 +117,10 @@ input[type="number"] {
 .hint { margin: -4px 0 0; color: var(--muted); font-size: 12px; }
 .panel.disabled .row { opacity: .45; }
 
+.presets { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 2px 62px; }
+.presets .small { min-width: 40px; padding: 3px 8px; font-variant-numeric: tabular-nums; }
+.presets .small.active { border-color: var(--accent); color: var(--accent-strong); }
+
 #filePanel { display: flex; flex-direction: column; gap: 8px; }
 #filePanel[hidden] { display: none; }
 .file-row { display: flex; align-items: center; gap: 8px; min-height: 28px; }

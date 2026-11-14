@@ -24,7 +24,7 @@
  */
 (function (root) {
   const LIMITS = {
-    base: { min: 40, max: 1000 },
+    base: { min: 40, max: 400 },
     diff: { min: 0.5, max: 20 },
     swap: { min: 0.1, max: 5 },
     volume: { min: 0, max: 100 },

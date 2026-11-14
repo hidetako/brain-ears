@@ -84,6 +84,29 @@ const near = (actual, expected, tol, label) =>
   await page.fill('#diffNum', '10');
   await page.dispatchEvent('#diffNum', 'change');
 
+  // 3b) ボタンで決まった値へ一度に移れる。基準音は 400 Hz まで
+  await page.click('.presets[data-key="base"] button[data-value="300"]');
+  await page.click('.presets[data-key="diff"] button[data-value="6"]');
+  assert.strictEqual(await page.inputValue('#baseNum'), '300');
+  assert.strictEqual(await page.inputValue('#diffNum'), '6.0');
+  assert.strictEqual(await page.inputValue('#base'), '300');
+  assert.ok(
+    await page.evaluate(() =>
+      document.querySelector('.presets[data-key="diff"] button[data-value="6"]').classList.contains('active')
+    ),
+    '選んだボタンが強調される'
+  );
+  await page.waitForTimeout(600);
+  m = await measure(page);
+  near(m.L.freq, 300, 0.5, 'ボタンで選んだ基準音');
+  near(m.R.freq, 306, 0.5, 'ボタンで選んだ左右差');
+  await page.fill('#baseNum', '999');
+  await page.dispatchEvent('#baseNum', 'change');
+  assert.strictEqual(await page.inputValue('#baseNum'), '400');
+  await page.click('.presets[data-key="base"] button[data-value="200"]');
+  await page.click('.presets[data-key="diff"] button[data-value="10"]');
+  await page.waitForTimeout(600);
+
   // 4) 左右別音量: 左 100% / 右 50% → RMS 比は 4:1 (二乗カーブ)
   await page.fill('#volLNum', '100');
   await page.dispatchEvent('#volLNum', 'change');
